@@ -1,0 +1,10 @@
+﻿sample,download,diagnosis,libsize,study,patient,set
+CSM5MCVL,https://osf.io/95ywd/download,CD,2884271,a,z,train
+CSM5MCXD,https://osf.io/tvsyk/download,CD,1961054,a,y,test
+CSM5MCXT,https://osf.io/4a2xg/download,CD,851396,b,x,validation
+CSM67UH7,https://osf.io/bx3uy/download,nonIBD,1531051,a,w,train
+HSM5MD5B,https://osf.io/8cvrs/download,nonIBD,2253090,a,v,test
+HSM6XRT8,https://osf.io/98tzh/download,nonIBD,1868074,b,u,validation
+CSM5FZ4M,https://osf.io/46nck/download,UC,2385646,a,t,train
+CSM5MCUO,https://osf.io/jkcxb/download,UC,1624708,a,s,test
+CSM5MCXH,https://osf.io/839hs/download,UC,1458791,b,q,validation

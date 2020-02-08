@@ -5,122 +5,65 @@ import glob
 import os
 from collections import Counter
 
-h = pd.read_csv("inputs/hmp2_mgx_metadata.tsv", sep = "\t", header = 0)
-HMP = h['External.ID'].unique().tolist()
+m = pd.read_csv("inputs/test_metadata.csv", header = 0)
+SAMPLES = m['sample'].unique().tolist()
 
 rule all:
     input:
         "outputs/comp/all_filt_comp.csv",
+        "outputs/hash_tables/normalized_abund_hashes_wide.feather",
         #"outputs/hash_tables/all_unnormalized_abund_hashes_wide.feather",
-        #"outputs/rf_validation/pred_srp057027.txt",
-        #"outputs/rf_validation/pred_srp057027.csv",
-        #"outputs/rf_validation/pred_prjna385949.txt",
-        #"outputs/rf_validation/pred_prjna385949.csv",
         #"outputs/gather/vita_vars.csv",
-        #"outputs/gtdbtk/gtdbtk.bac120.summary.tsv",
-        #expand("outputs/sgc_genome_queries_hmp/{hmp}_k31_r1_search_oh0/results.csv", 
-        #       hmp = HMP, gather_genomes = GATHER_GENOMES),
-        #expand("outputs/sgc_genome_queries/{library}_k31_r1_search_oh0/{gather_genomes}.fna.contigs.sig", 
-        #       library = LIBRARIES, gather_genomes = GATHER_GENOMES)
-        "aggregated_checkpoints/aggregate_spacegraphcats_gather_matches.txt"
-        "aggregated_checkpoints/aggregate_spacegraphcats_gather_matches_plass.txt"
+        #"aggregated_checkpoints/aggregate_spacegraphcats_gather_matches.txt",
+        #"aggregated_checkpoints/aggregate_spacegraphcats_gather_matches_plass.txt"
 
 ########################################
 ## PREPROCESSING
 ########################################
 
-rule download_fastq_files_R1:
-    output: 
-        r1="inputs/raw/{sample}_1.fastq.gz",
+rule download_fastq_files:
+    output: "inputs/raw/{sample}.fastq.gz",
     run:
-        row = m.loc[m['run_accession'] == wildcards.sample]
-        fastq_1 = row['fastq_ftp_1'].values
-        fastq_1 = fastq_1[0]
-        shell("wget -O {output.r1} {fastq_1}")
+        row = m.loc[m['sample'] == wildcards.sample]
+        fastq = row['download'].values
+        fastq = fastq[0]
+        shell("wget -O {output} {fastq}")
 
 
-rule download_fastq_files_R2:
-    output:
-        r2="inputs/raw/{sample}_2.fastq.gz"
-    run:
-        row = m.loc[m['run_accession'] == wildcards.sample]
-        fastq_2 = row['fastq_ftp_2'].values
-        fastq_2 = fastq_2[0]
-        shell("wget -O {output.r2} {fastq_2}")
-
-rule adapter_trim_files:
-    input:
-        r1 = "inputs/cat/{library}_1.fastq.gz",
-        r2 = 'inputs/cat/{library}_2.fastq.gz',
-        adapters = 'inputs/adapters2.fa'
-    output:
-        r1 = 'outputs/trim/{library}_R1.trim.fq.gz',
-        r2 = 'outputs/trim/{library}_R2.trim.fq.gz',
-        o1 = 'outputs/trim/{library}_o1.trim.fq.gz',
-        o2 = 'outputs/trim/{library}_o2.trim.fq.gz'
-    conda: 'env.yml'
+rule download_human_db:
+    output: "inputs/host/hg19_main_mask_ribo_animal_allplant_allfungus.fa.gz"
     shell:'''
-     trimmomatic PE {input.r1} {input.r2} \
-             {output.r1} {output.o1} {output.r2} {output.o2} \
-             ILLUMINACLIP:{input.adapters}:2:0:15 MINLEN:31  \
-             LEADING:2 TRAILING:2 SLIDINGWINDOW:4:2
+    wget -O {output} https://osf.io/84d59/download
     '''
 
-rule cutadapt_files:
-    input:
-        r1 = 'outputs/trim/{library}_R1.trim.fq.gz',
-        r2 = 'outputs/trim/{library}_R2.trim.fq.gz',
-    output:
-        r1 = 'outputs/cut/{library}_R1.cut.fq.gz',
-        r2 = 'outputs/cut/{library}_R2.cut.fq.gz',
-    conda: 'env2.yml'
-    shell:'''
-    cutadapt -a AGATCGGAAGAG -A AGATCGGAAGAG -o {output.r1} -p {output.r2} {input.r1} {input.r2}
-    '''
-
-rule fastqc:
-    input:
-        r1 = 'outputs/cut/{library}_R1.cut.fq.gz',
-        r2 = 'outputs/cut/{library}_R2.cut.fq.gz',
-    output:
-        r1 = 'outputs/fastqc/{library}_R1.cut_fastqc.html',
-        r2 = 'outputs/fastqc/{library}_R2.cut_fastqc.html'
-    conda: 'env2.yml'
-    shell:'''
-    fastqc -o outputs/fastqc {input} 
-    '''
-    
 rule remove_host:
 # http://seqanswers.com/forums/archive/index.php/t-42552.html
 # https://drive.google.com/file/d/0B3llHR93L14wd0pSSnFULUlhcUk/edit?usp=sharing
     output:
-        r1 = 'outputs/bbduk/{library}_R1.nohost.fq.gz',
-        r2 = 'outputs/bbduk/{library}_R2.nohost.fq.gz',
-        human_r1='outputs/bbduk/{library}_R1.human.fq.gz',
-        human_r2='outputs/bbduk/{library}_R2.human.fq.gz'
+        r = 'outputs/bbduk/{sample}.nohost.fq.gz',
+        human='outputs/bbduk/{sample}.human.fq.gz',
     input: 
-        r1 = 'outputs/cut/{library}_R1.cut.fq.gz',
-        r2 = 'outputs/cut/{library}_R2.cut.fq.gz',
+        r = 'inputs/raw/{sample}.fastq.gz',
         human='inputs/host/hg19_main_mask_ribo_animal_allplant_allfungus.fa.gz'
-    conda: 'env.yml'
+    conda: 'bbmap.yml'
     shell:'''
-    bbduk.sh -Xmx64g t=3 in={input.r1} in2={input.r2} out={output.r1} out2={output.r2} outm={output.human_r1} outm2={output.human_r2} k=31 ref={input.human}
+    bbduk.sh -Xmx15g t=3 in={input.r} out={output.r} outm={output.human} k=31 ref={input.human}
     '''
 
 rule kmer_trim_reads:
-    input: 
-        'outputs/bbduk/{library}_R1.nohost.fq.gz',
-        'outputs/bbduk/{library}_R2.nohost.fq.gz'
-    output: "outputs/abundtrim/{library}.abundtrim.fq.gz"
-    conda: 'env.yml'
+    input: 'outputs/bbduk/{sample}.nohost.fq.gz'
+    output: "outputs/abundtrim/{sample}.abundtrim.fq.gz"
+    params: mem="16e9"
+    conda: 'sourmash.yml'
     shell:'''
-    interleave-reads.py {input} | trim-low-abund.py --gzip -C 3 -Z 18 -M 60e9 -V - -o {output}
+    # interleave-reads.py {input} | \
+       trim-low-abund.py --gzip -C 3 -Z 18 -M {params.mem} -V - -o {output}
     '''
 
 rule compute_signatures:
-    input: "outputs/abundtrim/{library}.abundtrim.fq.gz"
-    output: "outputs/sigs/{library}.sig"
-    conda: 'env.yml'
+    input: "outputs/abundtrim/{sample}.abundtrim.fq.gz"
+    output: "outputs/sigs/{sample}.sig"
+    conda: 'sourmash.yml'
     shell:'''
     sourmash compute -k 21,31,51 --scaled 2000 --track-abundance -o {output} {input}
     '''
@@ -130,7 +73,7 @@ rule compute_signatures:
 ########################################
 
 rule get_greater_than_1_filt_sigs:
-    input: expand("outputs/sigs/{library}.sig", library = LIBRARIES) 
+    input: expand("outputs/sigs/{sample}.sig", sample = SAMPLES) 
     output: "outputs/filt_sig_hashes/greater_than_one_count_hashes.txt"
     run:
         # Determine the number of hashes, the number of unique hashes, and the number of
@@ -174,24 +117,24 @@ rule convert_greater_than_1_hashes_to_sig:
 rule filter_signatures_to_greater_than_1_hashes:
     input:
         filt_sig = "outputs/filt_sig_hashes/greater_than_one_count_hashes.sig",
-        sigs = "outputs/sigs/{library}.sig"
-    output: "outputs/filt_sigs/{library}_filt.sig"
+        sigs = "outputs/sigs/{sample}.sig"
+    output: "outputs/filt_sigs/{sample}_filt.sig"
     conda: 'sourmash.yml'
     shell:'''
     sourmash signature intersect -o {output} -A {input.sigs} -k 31 {input.sigs} {input.filt_sig}
     '''
 
 rule name_filtered_sigs:
-    input: "outputs/filt_sigs/{library}_filt.sig"
-    output: "outputs/filt_sigs_named/{library}_filt_named.sig"
+    input: "outputs/filt_sigs/{sample}_filt.sig"
+    output: "outputs/filt_sigs_named/{sample}_filt_named.sig"
     conda: 'sourmash.yml'
     shell:'''
-    sourmash signature rename -o {output} -k 31 {input} {wildcards.library}_filt
+    sourmash signature rename -o {output} -k 31 {input} {wildcards.sample}_filt
     '''
 
 rule convert_greater_than_1_signatures_to_csv:
-    input: "outputs/filt_sigs_named/{library}_filt_named.sig"
-    output: "outputs/filt_sigs_named_csv/{library}_filt_named.csv"
+    input: "outputs/filt_sigs_named/{sample}_filt_named.sig"
+    output: "outputs/filt_sigs_named_csv/{sample}_filt_named.csv"
     conda: 'sourmash.yml'
     shell:'''
     python scripts/sig_to_csv.py {input} {output}
@@ -199,7 +142,7 @@ rule convert_greater_than_1_signatures_to_csv:
 
 rule make_hash_abund_table_long_normalized:
     input: 
-        expand("outputs/filt_sigs_named_csv/{library}_filt_named.csv", library = LIBRARIES)
+        expand("outputs/filt_sigs_named_csv/{sample}_filt_named.csv", sample = SAMPLES)
     output: csv = "outputs/hash_tables/normalized_abund_hashes_long.csv"
     conda: 'r.yml'
     script: "scripts/normalized_hash_abund_long.R"
@@ -218,6 +161,7 @@ rule make_hash_abund_table_wide:
         ibd_wide = ibd_wide.reset_index(drop=True)
         ibd_wide.columns = ibd_wide.columns.astype(str)
         ibd_wide.to_feather(str(output)) 
+
 
 ########################################
 ## Random forests & optimization
@@ -388,10 +332,10 @@ rule gtdbtk_gather_matches:
 checkpoint spacegraphcats_gather_matches:
     input: 
         query = directory("outputs/gather_genomes/"),
-        conf = expand("inputs/sgc_conf/{library}_r1_conf.yml", library = LIBRARIES),
-        reads = expand("outputs/abundtrim/{library}.abundtrim.fq.gz", library = LIBRARIES)
+        conf = expand("inputs/sgc_conf/{sample}_r1_conf.yml", sample = SAMPLES),
+        reads = expand("outputs/abundtrim/{sample}.abundtrim.fq.gz", sample = SAMPLES)
     output: 
-        directory(expand("outputs/sgc_genome_queries/{library}_k31_r1_search_oh0/", library = LIBRARIES))
+        directory(expand("outputs/sgc_genome_queries/{sample}_k31_r1_search_oh0/", sample = SAMPLES))
         #"outputs/sgc_genome_queries/{library}_k31_r1_search_oh0/{gather_genome}.cdbg_ids.reads.fa.gz",
     params: outdir = "outputs/sgc_genome_queries"
     conda: "spacegraphcats.yml"
@@ -400,18 +344,18 @@ checkpoint spacegraphcats_gather_matches:
     '''
 
 rule calc_sig_nbhd_reads:
-    input: "outputs/sgc_genome_queries/{library}_k31_r1_search_oh0/{gather_genome}.fna.cdbg_ids.reads.fa.gz"
-    output: "outputs/nbhd_read_sigs/{library}/{gather_genome}.cdbg_ids.reads.sig"
+    input: "outputs/sgc_genome_queries/{sample}_k31_r1_search_oh0/{gather_genome}.fna.cdbg_ids.reads.fa.gz"
+    output: "outputs/nbhd_read_sigs/{sample}/{gather_genome}.cdbg_ids.reads.sig"
     conda: "sourmash.yml"
     shell:'''
-    sourmash compute -k 21,31,51 --scaled 2000 --track-abundance -o {output} --merge {wildcards.library}_{wildcards.gather_genome} {input}
+    sourmash compute -k 21,31,51 --scaled 2000 --track-abundance -o {output} --merge {wildcards.sample}_{wildcards.gather_genome} {input}
     '''
 
 def aggregate_spacegraphcats_gather_matches(wildcards):
     # checkpoint_output produces the output dir from the checkpoint rule.
     checkpoint_output = checkpoints.spacegraphcats_gather_matches.get(**wildcards).output[0]    
-    file_names = expand("outputs/nbhd_read_sigs/{library}/{gather_genome}.cdbg_ids.reads.sig",
-                        library = LIBRARIES, 
+    file_names = expand("outputs/nbhd_read_sigs/{sample}/{gather_genome}.cdbg_ids.reads.sig",
+                        sample = SAMPLES, 
                         gather_genome = glob_wildcards(os.path.join(checkpoint_output, "{gather_genome}.fna.cdbg_ids.reads.fa.gz")).gather_genome)
     return file_names
 
@@ -424,16 +368,16 @@ rule aggregate_signatures:
     '''
 
 rule plass_nbhd_reads:
-    input: "outputs/sgc_genome_queries/{library}_k31_r1_search_oh0/{gather_genome}.fna.cdbg_ids.reads.fa.gz"
-    output: "outputs/nbhd_read_plass/{library}/{gather_genome}.cdbg_ids.reads.plass.faa"
+    input: "outputs/sgc_genome_queries/{sample}_k31_r1_search_oh0/{gather_genome}.fna.cdbg_ids.reads.fa.gz"
+    output: "outputs/nbhd_read_plass/{sample}/{gather_genome}.cdbg_ids.reads.plass.faa"
     conda: "plass.yml"
     shell:'''
     plass assemble {input} {output} tmp
     '''
 
 rule cdhit_plass:
-    input: "outputs/nbhd_read_plass/{library}/{gather_genome}.cdbg_ids.reads.plass.faa"
-    output: "outputs/nbhd_read_cdhit/{library}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa"
+    input: "outputs/nbhd_read_plass/{sample}/{gather_genome}.cdbg_ids.reads.plass.faa"
+    output: "outputs/nbhd_read_cdhit/{sample}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa"
     conda: "plass.yml"
     shell:'''
     cd-hit -i {input} -o {output} -c 1
@@ -442,8 +386,8 @@ rule cdhit_plass:
 def aggregate_spacegraphcats_gather_matches_plass(wildcards):
     # checkpoint_output produces the output dir from the checkpoint rule.
     checkpoint_output = checkpoints.spacegraphcats_gather_matches.get(**wildcards).output[0]    
-    file_names = expand("outputs/nbhd_read_cdhit/{library}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa",
-                        library = LIBRARIES, 
+    file_names = expand("outputs/nbhd_read_cdhit/{sample}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa",
+                        sample = SAMPLES, 
                         gather_genome = glob_wildcards(os.path.join(checkpoint_output, "{gather_genome}.fna.cdbg_ids.reads.fa.gz")).gather_genome)
     return file_names
 
@@ -454,8 +398,8 @@ rule aggregate_spacegraphcats_gather_matches_plass:
     touch {output}
     '''
 rule paladin_index_plass:
-    input: "outputs/nbhd_read_cdhit/{library}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa"
-    output: "outputs/nbhd_read_cdhit/{library}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa.bwt"
+    input: "outputs/nbhd_read_cdhit/{sample}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa"
+    output: "outputs/nbhd_read_cdhit/{sample}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa.bwt"
     conda: "plass.yml"
     shell: '''
     paladin index -r3 {input}
@@ -463,10 +407,10 @@ rule paladin_index_plass:
 
 rule paladin_align_plass:
     input:
-        indx="outputs/nbhd_read_cdhit/{library}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa.bwt",
-        reads="outputs/sgc_genome_queries/{library}_k31_r1_search_oh0/{gather_genome}.fna.cdbg_ids.reads.fa.gz"
-    output: "outputs/nbhd_read_paladin/{library}/{gather_genome}.sam"
-    params: indx = "outputs/nbhd_read_cdhit/{library}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa"
+        indx="outputs/nbhd_read_cdhit/{sample}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa.bwt",
+        reads="outputs/sgc_genome_queries/{sample}_k31_r1_search_oh0/{gather_genome}.fna.cdbg_ids.reads.fa.gz"
+    output: "outputs/nbhd_read_paladin/{sample}/{gather_genome}.sam"
+    params: indx = "outputs/nbhd_read_cdhit/{sample}/{gather_genome}.cdbg_ids.reads.plass.cdhit.faa"
     conda: "plass.yml"
     shell:'''
     paladin align -f 125 -t 2 {params.indx} {input.reads} > {output}
@@ -479,7 +423,7 @@ rule paladin_align_plass:
 
 rule compare_signatures_cosine:
     input: 
-        expand("outputs/filt_sigs_named/{library}_filt_named.sig", library = LIBRARIES),
+        expand("outputs/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES),
     output: "outputs/comp/all_filt_comp.csv"
     conda: "sourmash.yml"
     shell:'''
@@ -488,7 +432,7 @@ rule compare_signatures_cosine:
 
 rule compare_signatures_jaccard:
     input: 
-        expand("outputs/filt_sigs_named/{library}_filt_named.sig", library = LIBRARIES),
+        expand("outputs/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES),
     output: "outputs/comp/all_filt_comp_jaccard.csv"
     conda: "sourmash.yml"
     shell:'''
@@ -503,7 +447,7 @@ rule compare_signatures_jaccard:
 ## Differential abundance
 ########################################
 
-rule hash_table_long_unnormalized_hmp:
+rule hash_table_long_unnormalized:
     """
     Unlike the hashtable that is input into the random forest analysis, this
     hash table is not normalized by number of hashes in the filtered signature. 
@@ -511,12 +455,12 @@ rule hash_table_long_unnormalized_hmp:
     differential abundance expects unnormalized counts.
     """
     input: 
-        expand("outputs/filt_sigs_named_csv_hmp/{hmp}_filt_named.csv", hmp = HMP)
+        expand("outputs/filt_sigs_named_csv_hmp/{sample}_filt_named.csv", sample = SAMPLES)
     output: csv = "outputs/hash_tables/hmp_unnormalized_abund_hashes_long.csv"
     conda: 'r.yml'
     script: "scripts/all_unnormalized_hash_abund_long.R"
         
-rule hash_table_wide_unnormalized_hmp:
+rule hash_table_wide_unnormalized:
     input: "outputs/hash_tables/hmp_unnormalized_abund_hashes_long.csv"
     output: "outputs/hash_tables/hmp_unnormalized_abund_hashes_wide.feather"
     run:
