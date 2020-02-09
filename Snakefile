@@ -47,13 +47,13 @@ rule remove_host:
         human='inputs/host/hg19_main_mask_ribo_animal_allplant_allfungus.fa.gz'
     conda: 'bbmap.yml'
     shell:'''
-    bbduk.sh -Xmx15g t=3 in={input.r} out={output.r} outm={output.human} k=31 ref={input.human}
+    bbduk.sh -Xmx64g t=3 in={input.r} out={output.r} outm={output.human} k=31 ref={input.human}
     '''
 
 rule kmer_trim_reads:
     input: 'outputs/bbduk/{sample}.nohost.fq.gz'
     output: "outputs/abundtrim/{sample}.abundtrim.fq.gz"
-    params: mem="16e9"
+    params: mem="20e9"
     conda: 'sourmash.yml'
     shell:'''
     # interleave-reads.py {input} | \
