@@ -56,8 +56,7 @@ rule kmer_trim_reads:
     params: mem="20e9"
     conda: 'sourmash.yml'
     shell:'''
-    # interleave-reads.py {input} | \
-       trim-low-abund.py --gzip -C 3 -Z 18 -M {params.mem} -V - -o {output}
+    trim-low-abund.py --gzip -C 3 -Z 18 -M {params.mem} -V {input} -o {output}
     '''
 
 rule compute_signatures:
@@ -121,7 +120,7 @@ rule filter_signatures_to_greater_than_1_hashes:
     output: "outputs/filt_sigs/{sample}_filt.sig"
     conda: 'sourmash.yml'
     shell:'''
-    sourmash signature intersect -o {output} -A {input.sigs} -k 31 {input.sigs} {input.filt_sig}
+    sourmash sig intersect -o {output} -A {input.sigs} -k 31 {input.sigs} {input.filt_sig}
     '''
 
 rule name_filtered_sigs:
@@ -129,7 +128,7 @@ rule name_filtered_sigs:
     output: "outputs/filt_sigs_named/{sample}_filt_named.sig"
     conda: 'sourmash.yml'
     shell:'''
-    sourmash signature rename -o {output} -k 31 {input} {wildcards.sample}_filt
+    sourmash sig rename -o {output} -k 31 {input} {wildcards.sample}_filt
     '''
 
 rule convert_greater_than_1_signatures_to_csv:
