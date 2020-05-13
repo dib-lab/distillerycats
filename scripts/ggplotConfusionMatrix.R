@@ -3,9 +3,8 @@ ggplotConfusionMatrix <- function(m, plot_title = NULL){
   library(ggplot2)
   library(scales)
   library(tidyr)
-  #mycaption <- paste("Accuracy", percent_format()(m$overall[1]),
-  #                   "Kappa", percent_format()(m$overall[2]))
-  mycaption <- paste("Accuracy", percent_format()(m$overall[1]))
+  mycaption <- paste("Accuracy", percent_format()(m$overall[1]),
+                     "Kappa", percent_format()(m$overall[2]))
   p <-
     ggplot(data = as.data.frame(m$table) ,
            aes(x = Reference, y = Prediction)) +
