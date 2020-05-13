@@ -1,5 +1,5 @@
 evaluate_model <- function(optimal_ranger, data, reference_class, set = "train", 
-                           study_as_validation = "iHMP", accuracy_csv = NULL,
+                           study_as_validation, accuracy_csv = NULL,
                            confusion_pdf = NULL) {
   library(ranger)
   library(readr)
@@ -22,8 +22,7 @@ evaluate_model <- function(optimal_ranger, data, reference_class, set = "train",
   
   # plot pretty confusion matrix
   cm <- caret::confusionMatrix(data = pred$predictions, 
-                               reference = factor(reference_class, 
-                                                  levels = c("nonIBD", "CD", "UC")))
+                               reference = factor(reference_class))
   plt <- ggplotConfusionMatrix(cm, plot_title = study_as_validation)
   ggsave(filename = confusion_pdf, plot = plt, scale = 1, width = 6, height = 4, dpi = 300)
 }
