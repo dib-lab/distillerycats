@@ -9,30 +9,31 @@ source(snakemake@input[['ggconfusion']])
 
 set.seed(1)
 
-ibd_filt <- read_csv(snakemake@input[['ibd_filt']])
-ibd_filt <- as.data.frame(ibd_filt)
-rownames(ibd_filt) <- ibd_filt$X1
-ibd_filt <- ibd_filt[ , -1]
+var_filt <- read_csv(snakemake@input[['var_filt']])
+var_filt <- as.data.frame(var_filt)
+rownames(var_filt) <- var_filt$X1
+var_filt <- var_filt[ , -1]
 
 ## read in study metadata
-## collapse duplicate libraries so each sample only has one row
+## change "-" in sample names to "." as some programs automatically make this change
+## filter to contain only samples that are in var_filt
+## only keep distinct rows.
 info <- read_tsv(snakemake@input[['info']]) %>%
-  select(study_accession, library_name, diagnosis) %>%
-  mutate(library_name = gsub("\\-", "\\.", library_name)) %>%
-  filter(library_name %in% rownames(ibd_filt)) %>%
+  mutate(sample = gsub("\\-", "\\.", sample)) %>%
+  filter(sample %in% rownames(var_filt)) %>%
   distinct()
 
 ## set validation cohort and remove it from variable selection
 info_validation <- info %>%
   filter(study_accession == snakemake@params[['validation_study']]) %>%
-  mutate(library_name = gsub("-", "\\.", library_name))
-ibd_validation <- ibd_filt[rownames(ibd_filt) %in% info_validation$library_name, ]
-# match order of to ibd_filt
-info_validation <- info_validation[order(match(info_validation$library_name, rownames(ibd_validation))), ]
+  mutate(sample = gsub("-", "\\.", sample))
+var_validation <- var_filt[rownames(var_filt) %in% info_validation$sample, ]
+# match order of to var_filt
+info_validation <- info_validation[order(match(info_validation$sample, rownames(var_validation))), ]
 # check names
-all.equal(info_validation$library_name, rownames(ibd_validation))
-# make diagnosis var
-diagnosis_validation <- info_validation$diagnosis
+all.equal(info_validation$sample, rownames(var_validation))
+# make var col
+var_validation <- info_validation$var
 
 
 ## remove validation cohort from training data
@@ -44,27 +45,27 @@ diagnosis_validation <- info_validation$diagnosis
 
 info_novalidation <- info %>%
   filter(study_accession != snakemake@params[['validation_study']]) %>%
-  mutate(library_name = gsub("-", "\\.", library_name))
-ibd_novalidation <- ibd_filt[rownames(ibd_filt) %in% info_novalidation$library_name, ]
-# match order of to ibd_filt
-info_novalidation <- info_novalidation[order(match(info_novalidation$library_name, rownames(ibd_novalidation))), ]
+  mutate(sample = gsub("-", "\\.", sample))
+var_novalidation <- var_filt[rownames(var_filt) %in% info_novalidation$sample, ]
+# match order of to var_filt
+info_novalidation <- info_novalidation[order(match(info_novalidation$sample, rownames(var_novalidation))), ]
 # check names
-all.equal(info_novalidation$library_name, rownames(ibd_novalidation))
-# make diagnosis var
-diagnosis_novalidation <- info_novalidation$diagnosis
+all.equal(info_novalidation$sample, rownames(var_novalidation))
+# make var col
+var_novalidation <- info_novalidation$var
 
 # Include classification vars as cols in df
-ibd_novalidation$diagnosis <- diagnosis_novalidation
-ibd_validation$diagnosis <- diagnosis_validation
+var_novalidation$var <- var_novalidation
+var_validation$var <- var_validation
 
 # tune ranger -------------------------------------------------------------
 
-# Make an mlr task with the ibd_train dataset here 
-tmp <- ibd_novalidation
+# Make an mlr task with the var_train dataset here 
+tmp <- var_novalidation
 colnames(tmp) <-  make.names(colnames(tmp))
-ibd_task <- makeClassifTask(data = tmp, target = "diagnosis")
+var_task <- makeClassifTask(data = tmp, target = "var")
 # Run tuning process
-res <- tuneRanger(ibd_task, num.threads = snakemake@params[['threads']])
+res <- tuneRanger(var_task, num.threads = snakemake@params[['threads']])
 
 # write model parameters to a file
 write_tsv(res$recommended.pars, snakemake@output[['recommended_pars']])
@@ -74,12 +75,12 @@ write_tsv(res$recommended.pars, snakemake@output[['recommended_pars']])
 # extract model parameters and use to build an optimal RF
 
 # use model parameters to build optimized RF
-ibd_novalidation$diagnosis <- as.factor(ibd_novalidation$diagnosis)
+var_novalidation$var <- as.factor(var_novalidation$var)
 optimal_rf <- ranger(
-  dependent.variable.name = "diagnosis",
+  dependent.variable.name = "var",
   mtry            = res$recommended.pars$mtry,
   num.trees       = 10000,
-  data            = ibd_novalidation,
+  data            = var_novalidation,
   sample.fraction = res$recommended.pars$sample.fraction,
   min.node.size   = res$recommended.pars$min.node.size,
   seed            = 1,
@@ -91,16 +92,16 @@ saveRDS(optimal_rf, file = snakemake@output[['optimal_rf']])
 # evaluate the accuracy of the model and generate a confusion matrix
 # training data
 evaluate_model(optimal_ranger = optimal_rf, 
-               data = ibd_novalidation, 
-               reference_class = diagnosis_novalidation, 
+               data = var_novalidation, 
+               reference_class = var_novalidation, 
                set = "novalidation", 
                study_as_validation = snakemake@params[['validation_study']],
                accuracy_csv = snakemake@output[['training_accuracy']],
                confusion_pdf = snakemake@output[['training_confusion']])
 # validation data
 evaluate_model(optimal_ranger = optimal_rf, 
-               data = ibd_validation, 
-               reference_class = diagnosis_validation, 
+               data = var_validation, 
+               reference_class = var_validation, 
                set = "validation", 
                study_as_validation = snakemake@params[['validation_study']],
                accuracy_csv = snakemake@output[['validation_accuracy']],
