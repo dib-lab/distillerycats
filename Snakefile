@@ -141,6 +141,14 @@ rule name_filtered_sigs:
     sourmash sig rename -o {output} -k 31 {input} {wildcards.sample}_filt
     '''
 
+rule describe_filtered_sigs:
+    input: expand("outputs/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES)
+    output: "outputs/filt_sigs_named/sig_describe_filt_named_sig.csv"
+    conda: 'envs/sourmash.yml'
+    shell:'''
+    sourmash signature describe --csv {output} {input}
+    '''
+
 rule convert_greater_than_1_signatures_to_csv:
     input: "outputs/filt_sigs_named/{sample}_filt_named.sig"
     output: "outputs/filt_sigs_named_csv/{sample}_filt_named.csv"
