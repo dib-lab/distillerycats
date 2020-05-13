@@ -1,0 +1,10 @@
+channels:
+   - conda-forge
+   - bioconda
+   - defaults
+dependencies:
+   - plass=3.764a3
+   - cd-hit=4.8.1
+   - paladin=1.4.6
+   - samtools=1.10
+   - salmon=0.15.0
