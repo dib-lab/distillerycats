@@ -8,33 +8,30 @@ from collections import Counter
 metadata_file = "inputs/test_metadata.csv"
 m = pd.read_csv(metadata_file, header = 0)
 SAMPLES = m['sample'].unique().tolist()
+STUDY = m['study'].unique().tolist()
 
 rule all:
     input:
-        "outputs/comp/all_filt_comp.csv",
-        "outputs/hash_tables/normalized_abund_hashes_wide.feather",
-        #"outputs/hash_tables/all_unnormalized_abund_hashes_wide.feather",
-        #"outputs/gather/vita_vars.csv",
-        #"aggregated_checkpoints/aggregate_spacegraphcats_gather_matches.txt",
-        #"aggregated_checkpoints/aggregate_spacegraphcats_gather_matches_plass.txt"
+        "outputs/vita_rf/vita_vars_merged.sig",
+        "outputs/comp/var_plt_all_filt_cosine.pdf",
+        "outputs/comp/var_plt_all_filt_jaccard.pdf"
 
 ########################################
 ## PREPROCESSING
 ########################################
 
-#rule download_fastq_files:
-#    output: "inputs/raw/{sample}.fastq.gz",
-#    run:
-#        row = m.loc[m['sample'] == wildcards.sample]
-#        fastq = row['download'].values
-#        fastq = fastq[0]
-#        shell("wget -O {output} {fastq}")
-
-#rule fastp:
-#    conda: 'envs/fastp.yml'
-#    shell:'''
-#    fastp -i in.R1.fq.gz -I in.R2.fq.gz -o out.R1.fq.gz -O out.R2.fq.gz -q 4 -j json_output -l 31 -c
-#    '''
+rule fastp:
+    input: 
+        r1 = "inputs/raw/{sample}_R1.fq.gz",
+        r2 = "inputs/raw/{sample}_R2.fq.gz"
+    output: 
+        r1 = 'outputs/fastp/{sample}_R1.fastp.fq.gz',
+        r2 = 'outputs/fastp/{sample}_R2.fastp.fq.gz',
+        json = 'outputs/fastp/{sample}.json'
+    conda: 'envs/fastp.yml'
+    shell:'''
+    fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} -q 4 -j {output.json} -l 31 -c
+    '''
 
 rule download_human_db:
     output: "inputs/host/hg19_main_mask_ribo_animal_allplant_allfungus.fa.gz"
