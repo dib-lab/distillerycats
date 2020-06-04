@@ -14,7 +14,9 @@ rule all:
     input:
         "outputs/vita_rf/vita_vars_merged.sig",
         "outputs/comp/var_plt_all_filt_cosine.pdf",
-        "outputs/comp/var_plt_all_filt_jaccard.pdf"
+        "outputs/comp/var_plt_all_filt_jaccard.pdf",
+        "outputs/gather_matches_lca/lca_summarize.csv",
+        expand('outputs/optimal_rf/{study}_validation_acc.csv', study = STUDY)
 
 ########################################
 ## PREPROCESSING
@@ -195,9 +197,9 @@ rule vita_var_sel_rf:
     output:
         vita_rf = "outputs/vita_rf/{study}_vita_rf.RDS",
         vita_vars = "outputs/vita_rf/{study}_vita_vars.txt",
-        var_filt = "outputs/vita_rf/{study}_ibd_filt.csv"
+        var_filt = "outputs/vita_rf/{study}_var_filt.csv"
     params: 
-        threads = 32,
+        threads = 4,
         validation_study = "{study}"
     conda: 'envs/rf.yml'
     script: "scripts/vita_rf.R"
@@ -216,7 +218,7 @@ rule loo_validation:
         validation_accuracy = 'outputs/optimal_rf/{study}_validation_acc.csv',
         validation_confusion = 'outputs/optimal_rf/{study}_validation_confusion.pdf'
     params:
-        threads = 20,
+        threads = 5,
         validation_study = "{study}"
     conda: 'envs/tuneranger.yml'
     script: "scripts/tune_rf.R"
@@ -354,6 +356,14 @@ rule merge_vita_vars_sig_all:
     sourmash sig merge -o {output} {input}
     '''
 
+rule merge_vita_vars_matching_sigs_all:
+    input: expand("outputs/gather/{study}_vita_vars_all.matches", study = STUDY)
+    output: "outputs/vita_rf/vita_vars_matches_merged.sig"
+    conda: "envs/sourmash.yml"
+    shell:'''
+    sourmash sig merge -o {output} {input}
+    '''
+
 rule combine_gather_vita_vars_all:
     output: "outputs/gather/vita_vars_all.csv"
     input: expand("outputs/gather/{study}_vita_vars_all.csv", study = STUDY)
@@ -362,94 +372,45 @@ rule combine_gather_vita_vars_all:
         
         li = []
         for filename in input:
-            df = pd.read_csv(str(filename), index_col=None, header=0)
-            df["study"] = str(filename)
             li.append(df)
 
         frame = pd.concat(li, axis=0, ignore_index=True)
         frame.to_csv(str(output))
 
 
-checkpoint collect_gather_vita_vars_all_sig_matches:
-    input:
-        db1="inputs/gather_databases/almeida-mags-k31.sbt.json",
-        db2="inputs/gather_databases/genbank-d2-k31.sbt.json",
-        db3="inputs/gather_databases/nayfach-k31.sbt.json",
-        db4="inputs/gather_databases/pasolli-mags-k31.sbt.json",
-        csv="outputs/gather/vita_vars_all.csv"
-    output: directory("outputs/gather_matches/")
-    run:
-        from sourmash import signature
-        import pandas as pd
-
-        # load gather results
-        df = pd.read_csv(input.csv)
-
-        # for each row, determine which database the result came from
-        for index, row in df.iterrows():
-            if row["filename"] == "inputs/gather_databases/almeida-mags-k31.sbt.json":
-                sigfp = "inputs/gather_databases/.sbt.almeida-mags-k31/" + row["md5"]
-            elif row["filename"] == "inputs/gather_databases/genbank-d2-k31.sbt.json":
-                sigfp = "inputs/gather_databases/.sbt.genbank-d2-k31/" + row["md5"]
-            elif row["filename"] == "inputs/gather_databases/nayfach-k31.sbt.json":
-                sigfp = "inputs/gather_databases/.sbt.nayfach-k31/" + row["md5"]
-            elif row["filename"] == "inputs/gather_databases/pasolli-mags-k31.sbt.json":
-                sigfp = "inputs/gather_databases/.sbt.pasolli-mags-k31/" + row["md5"]
-            # open the signature, parse its name, and write the signature out to a new
-            # folder
-            sigfp = open(sigfp, 'rt')
-            sig = signature.load_one_signature(sigfp)
-            out_sig = str(sig.name())
-            out_sig = out_sig.split('/')[-1]
-            out_sig = out_sig.split(" ")[0]
-            out_sig = "outputs/gather_matches/" + out_sig + ".sig"
-            with open(str(out_sig), 'wt') as fp:
-                signature.save_signatures([sig], fp)      
-
-
-def aggregate_collect_gather_vita_vars_all_sig_matches(wildcards):
-    checkpoint_output = checkpoints.collect_gather_vita_vars_all_sig_matches.get(**wildcards).output[0]  
-    file_names = expand("outputs/gather_matches/{genome}.sig", 
-                        genome = glob_wildcards(os.path.join(checkpoint_output, "{genome}.sig")).genome)
-    return file_names
-    
-
 rule create_hash_genome_map_gather_vita_vars_all:
     input:
-        #genomes = "outputs/gather_matches/{genome}.sig",
-        genomes = aggregate_collect_gather_vita_vars_all_sig_matches,
+        matches = "outputs/vita_rf/vita_vars_matches_merged.sig",
         vita_vars = "outputs/vita_rf/vita_vars_merged.sig"
-    output: "outputs/gather_matches_hash_map/hash_to_genome_map_gather_all.csv"
+    output: 
+        hashmap = "outputs/gather_matches_hash_map/hash_to_genome_map_gather_all.csv",
+        namemap = "outputs/gather_matches_hash_map/genome_name_to_filename_map_gather_all.csv"
     run:
         from sourmash import signature
         import pandas as pd
         
-        sigs = input.genomes
         # read in all genome signatures that had gather 
         # matches for the var imp hashes create a dictionary, 
-        # where the key is the genome and the values are the minhashes
+        # where the key is the genome and the values are the minhashes.
+        # also generate a list of all minhashes from all genomes. 
+        sigfp = open(input.matches, "rt")
+        siglist = list(signature.load_signatures(sigfp))
         genome_dict = {}
-        for sig in sigs:
-            sigfp = open(sig, 'rt')
-            siglist = list(signature.load_signatures(sigfp))
-            loaded_sig = siglist[0] 
-            mins = loaded_sig.minhash.get_mins() # Get the minhashes 
-            genome_dict[sig] = mins
+        all_mins = []
+        sig_names = []
+        sig_filenames = []
+        for num, sig in enumerate(siglist):
+            loaded_sig = siglist[num]
+            mins = loaded_sig.minhash.get_mins() # Get the minhashes
+            genome_dict[sig.name()] = mins
+            all_mins += mins
+            sig_names += sig.name()
+            sig_filenames += sig.filename
 
         # read in vita variables
         sigfp = open(str(input.vita_vars), 'rt')
         vita_vars = sig = signature.load_one_signature(sigfp)
         vita_vars = vita_vars.minhash.get_mins() 
-
-        # generate a list of all minhashes from all genomes
-        all_mins = []
-        for file in sigs:
-            if os.path.getsize(file) > 0:
-                sigfp = open(file, 'rt')
-                siglist = list(signature.load_signatures(sigfp))
-                loaded_sig = siglist[0]
-                mins = loaded_sig.minhash.get_mins() # Get the minhashes 
-                all_mins += mins
 
         # define a function where if a hash is a value, 
         # return all key for which it is a value
@@ -477,7 +438,13 @@ rule create_hash_genome_map_gather_vita_vars_all:
         # drop duplicate rows in the df
         df = df.drop_duplicates()
         # write the dataframe to csv
-        df.to_csv(str(output), index = False) 
+        df.to_csv(str(output.hashmap), index = False) 
+        
+        # generate a sig.name() : sig.filename() map, which will be helpful for
+        # download the actual genomes later. 
+        name_dict = {'sig_name': sig_names, 'sig_filename': sig_filenames} 
+        name_df = pd.DataFrame(data = name_dict)
+        name_df.to_csv(str(output.namemap), index = False)       
 
 
 rule download_sourmash_lca_db:
@@ -486,52 +453,14 @@ rule download_sourmash_lca_db:
     wget -O {output} https://osf.io/gs29b/download
     '''
 
-rule sourmash_lca_classify_vita_vars_all_sig_matches:
-    input:
-        db = "inputs/gather_databases/gtdb-release89-k31.lca.json.gz",
-        genomes = "outputs/gather_matches/{genome}.sig"
-    output: "outputs/gather_matches_lca_classify/{genome}.csv"
-    conda: "envs/sourmash.yml"
-    shell:'''
-    sourmash lca classify --db {input.db} --query {input.genomes} -o {output}
-    '''
-
-def aggregate_collect_gather_vita_vars_all_sig_matches_lca_classify(wildcards):
-    checkpoint_output = checkpoints.collect_gather_vita_vars_all_sig_matches.get(**wildcards).output[0]  
-    file_names = expand("outputs/gather_matches_lca_classify/{genome}.csv", 
-                        genome = glob_wildcards(os.path.join(checkpoint_output, "{genome}.sig")).genome)
-    return file_names
-
-    
-rule finished_collect_gather_vita_vars_all_sig_matches_lca_classify:
-    input: aggregate_collect_gather_vita_vars_all_sig_matches_lca_classify
-    output: "aggregated_checkpoints/finished_collect_gather_vita_vars_all_sig_matches_lca_classify.txt"
-    shell:'''
-    touch {output}
-    '''
-
 rule sourmash_lca_summarize_vita_vars_all_sig_matches:
     input:
         db = "inputs/gather_databases/gtdb-release89-k31.lca.json.gz",
-        genomes = "outputs/gather_matches/{genome}.sig"
-    output: "outputs/gather_matches_lca_summarize/{genome}.csv"
+        matches = "outputs/vita_rf/vita_vars_matches_merged.sig",
+    output: "outputs/gather_matches_lca/lca_summarize.csv"
     conda: "envs/sourmash.yml"
     shell:'''
-    sourmash lca summarize --db {input.db} --query {input.genomes} -o {output}
-    '''
-
-def aggregate_collect_gather_vita_vars_all_sig_matches_lca_summarize(wildcards):
-    checkpoint_output = checkpoints.collect_gather_vita_vars_all_sig_matches.get(**wildcards).output[0]  
-    file_names = expand("outputs/gather_matches_lca_summarize/{genome}.csv", 
-                        genome = glob_wildcards(os.path.join(checkpoint_output, "{genome}.sig")).genome)
-    return file_names
-
-    
-rule finished_collect_gather_vita_vars_all_sig_matches_lca_summarize:
-    input: aggregate_collect_gather_vita_vars_all_sig_matches_lca_summarize
-    output: "aggregated_checkpoints/finished_collect_gather_vita_vars_all_sig_matches_lca_summarize.txt"
-    shell:'''
-    touch {output}
+    sourmash lca summarize --singleton --db {input.db} --query {input.matches} -o {output}
     '''
 
 ###################################################
@@ -599,4 +528,5 @@ rule plot_comp_cosine:
         var = "outputs/comp/var_plt_all_filt_cosine.pdf"
     conda: "envs/ggplot.yml"
     script: "scripts/plot_comp.R"
+
 

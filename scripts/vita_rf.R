@@ -25,14 +25,14 @@ hashes <- hashes[ , -ncol(hashes)]                   # remove the samples column
 ## read in study metadata
 ## change "-" to "." in sample names, as some programs do this automatically
 ## collapse duplicate samples so each sample only has one row
-info <- read_tsv(snakemake@input[['info']]) %>%
+info <- read_csv(snakemake@input[['info']]) %>%
   mutate(sample = gsub("\\-", "\\.", sample)) %>%
   filter(sample %in% rownames(hashes)) %>%
   distinct()
 
 ## remove validation cohort from variable selection
 info_novalidation <- info %>%
-  filter(study_accession != snakemake@params[["validation_study"]]) %>%
+  filter(study != snakemake@params[["validation_study"]]) %>%
   mutate(sample = gsub("-", "\\.", sample))
 hashes_novalidation <- hashes[rownames(hashes) %in% info_novalidation$sample, ]
 

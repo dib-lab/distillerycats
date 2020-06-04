@@ -18,22 +18,22 @@ var_filt <- var_filt[ , -1]
 ## change "-" in sample names to "." as some programs automatically make this change
 ## filter to contain only samples that are in var_filt
 ## only keep distinct rows.
-info <- read_tsv(snakemake@input[['info']]) %>%
+info <- read_csv(snakemake@input[['info']]) %>%
   mutate(sample = gsub("\\-", "\\.", sample)) %>%
   filter(sample %in% rownames(var_filt)) %>%
   distinct()
 
 ## set validation cohort and remove it from variable selection
 info_validation <- info %>%
-  filter(study_accession == snakemake@params[['validation_study']]) %>%
+  filter(study == snakemake@params[['validation_study']]) %>%
   mutate(sample = gsub("-", "\\.", sample))
 var_validation <- var_filt[rownames(var_filt) %in% info_validation$sample, ]
 # match order of to var_filt
 info_validation <- info_validation[order(match(info_validation$sample, rownames(var_validation))), ]
 # check names
-all.equal(info_validation$sample, rownames(var_validation))
+stopifnot(all.equal(info_validation$sample, rownames(var_validation)))
 # make var col
-var_validation <- info_validation$var
+var_validation_vec <- info_validation$var
 
 
 ## remove validation cohort from training data
@@ -44,19 +44,19 @@ var_validation <- info_validation$var
 # see: https://github.com/PhilippPro/tuneRanger/issues/8
 
 info_novalidation <- info %>%
-  filter(study_accession != snakemake@params[['validation_study']]) %>%
+  filter(study != snakemake@params[['validation_study']]) %>%
   mutate(sample = gsub("-", "\\.", sample))
 var_novalidation <- var_filt[rownames(var_filt) %in% info_novalidation$sample, ]
 # match order of to var_filt
 info_novalidation <- info_novalidation[order(match(info_novalidation$sample, rownames(var_novalidation))), ]
 # check names
-all.equal(info_novalidation$sample, rownames(var_novalidation))
+stopifnot(all.equal(info_novalidation$sample, rownames(var_novalidation)))
 # make var col
-var_novalidation <- info_novalidation$var
+var_novalidation_vec <- info_novalidation$var
 
 # Include classification vars as cols in df
-var_novalidation$var <- var_novalidation
-var_validation$var <- var_validation
+var_novalidation$var <- var_novalidation_vec
+var_validation$var <- var_validation_vec
 
 # tune ranger -------------------------------------------------------------
 
@@ -66,10 +66,10 @@ colnames(tmp) <-  make.names(colnames(tmp))
 var_task <- makeClassifTask(data = tmp, target = "var")
 # Run tuning process
 res <- tuneRanger(var_task, num.threads = snakemake@params[['threads']])
-
+print("done tuning")
 # write model parameters to a file
 write_tsv(res$recommended.pars, snakemake@output[['recommended_pars']])
-
+print("saved res")
 # build optimal model ----------------------------------------------------------
 
 # extract model parameters and use to build an optimal RF
@@ -88,12 +88,12 @@ optimal_rf <- ranger(
 )
 
 saveRDS(optimal_rf, file = snakemake@output[['optimal_rf']])
-
+print("saved optimal")
 # evaluate the accuracy of the model and generate a confusion matrix
 # training data
 evaluate_model(optimal_ranger = optimal_rf, 
                data = var_novalidation, 
-               reference_class = var_novalidation, 
+               reference_class = var_novalidation_vec, 
                set = "novalidation", 
                study_as_validation = snakemake@params[['validation_study']],
                accuracy_csv = snakemake@output[['training_accuracy']],
@@ -101,7 +101,7 @@ evaluate_model(optimal_ranger = optimal_rf,
 # validation data
 evaluate_model(optimal_ranger = optimal_rf, 
                data = var_validation, 
-               reference_class = var_validation, 
+               reference_class = var_validation_vec, 
                set = "validation", 
                study_as_validation = snakemake@params[['validation_study']],
                accuracy_csv = snakemake@output[['validation_accuracy']],
