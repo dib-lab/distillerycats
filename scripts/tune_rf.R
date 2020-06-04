@@ -1,75 +1,108 @@
+library(readr)
+library(dplyr)
+library(ggplot2)
 library(ranger)
+library(mlr)
+library(tuneRanger)
+source(snakemake@input[['eval_model']])
+source(snakemake@input[['ggconfusion']])
+
 set.seed(1)
 
-# inspiration for tuning organization:
-# https://uc-r.github.io/random_forests#tune
+var_filt <- read_csv(snakemake@input[['var_filt']])
+var_filt <- as.data.frame(var_filt)
+rownames(var_filt) <- var_filt$X1
+var_filt <- var_filt[ , -1]
 
-# read in data ------------------------------------------------------------
+## read in study metadata
+## change "-" in sample names to "." as some programs automatically make this change
+## filter to contain only samples that are in var_filt
+## only keep distinct rows.
+info <- read_csv(snakemake@input[['info']]) %>%
+  mutate(sample = gsub("\\-", "\\.", sample)) %>%
+  filter(sample %in% rownames(var_filt)) %>%
+  distinct()
 
-ibd_novalidation_filt <- read.csv(snakemake@input[['ibd_novalidation']],
-                                  row.names = 1)
-diagosis <- read.table(snakemake@input[['ibd_novalidation_diagnosis']], 
-                       header = T)
-diagnosis <- diagnosis$x
-ibd_novalidation_filt$diagnosis <- diagnosis
+## set validation cohort and remove it from variable selection
+info_validation <- info %>%
+  filter(study == snakemake@params[['validation_study']]) %>%
+  mutate(sample = gsub("-", "\\.", sample))
+var_validation <- var_filt[rownames(var_filt) %in% info_validation$sample, ]
+# match order of to var_filt
+info_validation <- info_validation[order(match(info_validation$sample, rownames(var_validation))), ]
+# check names
+stopifnot(all.equal(info_validation$sample, rownames(var_validation)))
+# make var col
+var_validation_vec <- info_validation$var
 
-# make test and train -----------------------------------------------------
 
-train <- sample(nrow(ibd_novalidation_filt), 
-                0.7*nrow(ibd_novalidation_filt), 
-                replace = FALSE)
-train_set <- ibd_novalidation_filt[train, ]
-test_set <- ibd_novalidation_filt[-train, ]
-diagnosis_train <- diagnosis[train]
-diagnosis_test <- diagnosis[-train]
+## remove validation cohort from training data
+# using tuneRanger, we do not need to use a train/test/validation framework.
+# Instead, tuneRanger does not need a test set because each tree is only trained 
+# on a subset of the data (bag), so we can use the rest (out of bag) to obtain 
+# an unbiased performance estimation of a single tree and therefore of all trees.
+# see: https://github.com/PhilippPro/tuneRanger/issues/8
 
-# tune rf -----------------------------------------------------------------
+info_novalidation <- info %>%
+  filter(study != snakemake@params[['validation_study']]) %>%
+  mutate(sample = gsub("-", "\\.", sample))
+var_novalidation <- var_filt[rownames(var_filt) %in% info_novalidation$sample, ]
+# match order of to var_filt
+info_novalidation <- info_novalidation[order(match(info_novalidation$sample, rownames(var_novalidation))), ]
+# check names
+stopifnot(all.equal(info_novalidation$sample, rownames(var_novalidation)))
+# make var col
+var_novalidation_vec <- info_novalidation$var
 
-# hyperparameter grid search
-hyper_grid2 <- expand.grid(
-  mtry       = seq(sqrt(ncol(ibd_novalidation_filt))/2, 
-                   sqrt(ncol(ibd_novalidation_filt))*8, 
-                   by = 20),
-  node_size  = c(5, 7, 10),
-  sampe_size = c(.70, .80),
-  OOB_RMSE   = 0
-)
+# Include classification vars as cols in df
+var_novalidation$var <- var_novalidation_vec
+var_validation$var <- var_validation_vec
 
-for(i in 1:nrow(hyper_grid2)) { 
-  # train model
-  model <- ranger(
-    formula         = diagnosis_train ~ ., 
-    data            = train_set, 
-    num.trees       = 10000,
-    mtry            = hyper_grid$mtry[i],
-    min.node.size   = hyper_grid$node_size[i],
-    sample.fraction = hyper_grid$sampe_size[i],
-    seed            = 1
-  )
-  
-  # add OOB error to grid
-  hyper_grid2$OOB_RMSE[i] <- sqrt(model$prediction.error)
-}
+# tune ranger -------------------------------------------------------------
 
-# build optimal rf -------------------------------------------------------
+# Make an mlr task with the var_train dataset here 
+tmp <- var_novalidation
+colnames(tmp) <-  make.names(colnames(tmp))
+var_task <- makeClassifTask(data = tmp, target = "var")
+# Run tuning process
+res <- tuneRanger(var_task, num.threads = snakemake@params[['threads']])
+print("done tuning")
+# write model parameters to a file
+write_tsv(res$recommended.pars, snakemake@output[['recommended_pars']])
+print("saved res")
+# build optimal model ----------------------------------------------------------
 
-optimal_ranger <- ranger(
-  formula         = diagnosis_train ~ ., 
-  data            = train_set, 
+# extract model parameters and use to build an optimal RF
+
+# use model parameters to build optimized RF
+var_novalidation$var <- as.factor(var_novalidation$var)
+optimal_rf <- ranger(
+  dependent.variable.name = "var",
+  mtry            = res$recommended.pars$mtry,
   num.trees       = 10000,
-  mtry            = 960,
-  min.node.size   = 5,
-  sample.fraction = .7,
+  data            = var_novalidation,
+  sample.fraction = res$recommended.pars$sample.fraction,
+  min.node.size   = res$recommended.pars$min.node.size,
   seed            = 1,
   importance      = 'impurity'
 )
 
-saveRDS(optimal_ranger, snakemake@output[['optimal_rf']])
-
-pred_test <- predict(optimal_ranger, test_set)
-pred_test_tab <-table(observed = diagnosis_test, predicted = pred_test$predictions)
-write.table(pred_test_tab, snakemake@output[['pred_test']])
-
-pred_train <- predict(optimal_ranger, train_set)
-pred_train_tab <- table(observed = diagnosis_train, predicted = pred_train$predictions)
-write.table(pred_train_tab, snakemake@output[['pred_train']])
+saveRDS(optimal_rf, file = snakemake@output[['optimal_rf']])
+print("saved optimal")
+# evaluate the accuracy of the model and generate a confusion matrix
+# training data
+evaluate_model(optimal_ranger = optimal_rf, 
+               data = var_novalidation, 
+               reference_class = var_novalidation_vec, 
+               set = "novalidation", 
+               study_as_validation = snakemake@params[['validation_study']],
+               accuracy_csv = snakemake@output[['training_accuracy']],
+               confusion_pdf = snakemake@output[['training_confusion']])
+# validation data
+evaluate_model(optimal_ranger = optimal_rf, 
+               data = var_validation, 
+               reference_class = var_validation_vec, 
+               set = "validation", 
+               study_as_validation = snakemake@params[['validation_study']],
+               accuracy_csv = snakemake@output[['validation_accuracy']],
+               confusion_pdf = snakemake@output[['validation_confusion']])

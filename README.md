@@ -20,6 +20,7 @@ Some or all of the assumptions may be removed in future iterations
 + Reads must be > 31 bp in length
 + Requires snakemake-minimal, sourmash, feather, and pandas.
 
+
 ## Running the pipeline
 ```
 git clone https://github.com/dib-lab/distillerycats.git
