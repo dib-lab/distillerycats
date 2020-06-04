@@ -15,7 +15,7 @@ for(i in 1:length(files)){
   sample <- gsub("^X", "", sample)         # remove X appended by R on import
   sig$sample <- sample                     # set libname as col
   colnames(sig) <- c("minhash", "abund", "sample")
-  ibd_long[[i]] <- sig
+  var_long[[i]] <- sig
 }
 
 ## bind into one dataframe

@@ -12,7 +12,7 @@ rownames(comp) <-colnames(comp)                     # set rownames as samples
 
 # read in and formate metadata -------------------------------------------
 
-info <- read_tsv(snakemake@input[["info"]]) %>%
+info <- read_csv(snakemake@input[["info"]]) %>%
   filter(sample %in% colnames(comp)) %>%
   as.data.frame()
 

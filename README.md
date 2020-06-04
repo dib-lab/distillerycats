@@ -19,3 +19,4 @@ Some or all of the assumptions may be removed in future iterations
 + Requires samples from at least two studies.
 + Reads must be > 31 bp in length
 + Requires snakemake-minimal, sourmash, feather, and pandas.
+
