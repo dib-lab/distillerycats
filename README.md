@@ -13,10 +13,18 @@ Some or all of the assumptions may be removed in future iterations
 
 + Assumes paired-end shotgun metagenome reads
 + Assumes data are already downloaded and in `inputs/raw`
-+ currently focused on human microbiome samples
++ Currently focused on human microbiome samples
   + Removes human reads as contaminant host
   + Classifies sequences against [human microbiome MAG databases](https://osf.io/hza89/)
 + Requires samples from at least two studies.
 + Reads must be > 31 bp in length
 + Requires snakemake-minimal, sourmash, feather, and pandas.
 
+
+## Running the pipeline
+```
+git clone https://github.com/dib-lab/distillerycats.git
+cd distillerycats
+conda env create -f environment.yml -n dcats
+conda activate dcats
+```
