@@ -22,7 +22,7 @@ evaluate_model <- function(optimal_ranger, data, reference_class, set = "train",
   
   # plot pretty confusion matrix
   cm <- caret::confusionMatrix(data = pred$predictions, 
-                               reference = factor(reference_class))
+                               reference = factor(reference_class, levels = levels(pred$predictions)))
   plt <- ggplotConfusionMatrix(cm, plot_title = study_as_validation)
   ggsave(filename = confusion_pdf, plot = plt, scale = 1, width = 6, height = 4, dpi = 300)
 }

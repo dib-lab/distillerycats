@@ -101,7 +101,7 @@ evaluate_model(optimal_ranger = optimal_rf,
 # validation data
 evaluate_model(optimal_ranger = optimal_rf, 
                data = var_validation, 
-               reference_class = var_validation_vec, 
+               reference_class = var_validation_vec,
                set = "validation", 
                study_as_validation = snakemake@params[['validation_study']],
                accuracy_csv = snakemake@output[['validation_accuracy']],
