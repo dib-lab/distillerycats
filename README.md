@@ -20,7 +20,7 @@ Some or all of the assumptions may be removed in future iterations
   + Classifies sequences against [human microbiome MAG databases](https://osf.io/hza89/)
 + Requires samples from at least two studies.
 + Reads must be > 31 bp in length.
-+ Requires snakemake-minimal, sourmash, feather, and pandas.
++ Requires snakemake-minimal, [sourmash](http://sourmash.rtfd.io/), [feather](https://blog.rstudio.com/2016/03/29/feather/), and pandas.
 
 ## Getting started
 
