@@ -2,7 +2,7 @@ import os
 import sys
 import argparse
 import sourmash
-from sourmash import sourmash_args, signature
+from sourmash import sourmash_args
 from collections import Counter
 
 
@@ -35,7 +35,7 @@ def main(args):
         # add hashes to fresh_mh
         fresh_mh.add_many(counts.keys())
         # build sig
-        new_sig= sourmash.SourmashSignature(fresh_mh, name=f"aggregated_hashvals_above_{min_count}", filename=args.signatures_file)
+        new_sig= sourmash.signature.SourmashSignature(fresh_mh, name=f"aggregated_hashvals_above_{min_count}", filename=args.signatures_file)
         with open(args.output_sig, "w") as out:
             sourmash.signature.save_signatures([new_sig], sigout)
 
