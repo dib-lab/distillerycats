@@ -152,7 +152,7 @@ rule name_filtered_sigs:
     '''
 
 rule describe_filtered_sigs:
-    input: expand("outputs/{alpha}-{ksize}/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES)
+    input: expand("outputs/{{alpha}}-{{ksize}}/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES)
     output: "outputs/{alpha}-{ksize}/filt_sigs_named/sig_describe_filt_named_sig.csv"
     conda: 'envs/sourmash.yml'
     shell:'''
@@ -169,7 +169,7 @@ rule convert_greater_than_1_signatures_to_csv:
 
 rule make_hash_abund_table_long_normalized:
     input: 
-        expand("outputs/{alpha}-{ksize}/filt_sigs_named_csv/{sample}_filt_named.csv", sample = SAMPLES)
+        expand("outputs/{{alpha}}-{{ksize}}/filt_sigs_named_csv/{sample}_filt_named.csv", sample = SAMPLES)
     output: csv = "outputs/{alpha}-{ksize}/hash_tables/normalized_abund_hashes_long.csv"
     conda: 'envs/r.yml'
     script: "scripts/normalized_hash_abund_long.R"
@@ -290,8 +290,8 @@ rule merge_vita_vars_matching_sigs_all:
     '''
 
 rule combine_gather_vita_vars_all:
+    input: expand("outputs/{{alpha}}-{{ksize}}/gather/{study}_vita_vars_all.csv", study = STUDY)
     output: "outputs/{alpha}-{ksize}/gather/vita_vars_all.csv"
-    input: expand("outputs/{alpha}-{ksize}/gather/{study}_vita_vars_all.csv", study = STUDY)
     run:
         import pandas as pd
         
@@ -398,7 +398,7 @@ rule create_hash_genome_map_gather_vita_vars_all:
 
 rule compare_signatures_cosine:
     input: 
-        expand("outputs/{alpha}-{ksize}/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES),
+        expand("outputs/{{alpha}}-{{ksize}}/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES),
     output: "outputs/{alpha}-{ksize}/comp/all_filt_comp_cosine.csv"
     conda: "envs/sourmash.yml"
     shell:'''
@@ -407,7 +407,7 @@ rule compare_signatures_cosine:
 
 rule compare_signatures_jaccard:
     input: 
-        expand("outputs/{alpha}-{ksize}/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES),
+        expand("outputs/{{alpha}}-{{ksize}}/filt_sigs_named/{sample}_filt_named.sig", sample = SAMPLES),
     output: "outputs/{alpha}-{ksize}/comp/all_filt_comp_jaccard.csv"
     conda: "envs/sourmash.yml"
     shell:'''
