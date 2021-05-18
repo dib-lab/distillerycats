@@ -145,7 +145,7 @@ rule convert_greater_than_1_hashes_to_sig:
     output: "outputs/filt_sig_hashes/greater_than_one_count_hashes.sig"
     conda: 'envs/sourmash.yml'
     shell:'''
-    python python -m distillerycats.hashvals_to_signature -o {output} -k 31 --scaled 2000 --name greater_than_one_count_hashes --filename {input} {input}
+    python -m distillerycats.hashvals_to_signature -o {output} -k 31 --scaled 2000 --name greater_than_one_count_hashes --filename {input} {input}
     '''
 
 rule filter_signatures_to_greater_than_1_hashes:
@@ -259,7 +259,7 @@ rule convert_vita_vars_to_sig:
     output: "outputs/vita_rf/{study}_vita_vars.sig"
     conda: "envs/sourmash.yml"
     shell:'''
-    python -m distillerycats.hashvals-to-signature.py -o {output} -k 31 --scaled 2000 --name vita_vars --filename {input} {input}
+    python -m distillerycats.hashvals_to_signature -o {output} -k 31 --scaled 2000 --name vita_vars --filename {input} {input}
     '''
 
 rule download_gather_almeida:
