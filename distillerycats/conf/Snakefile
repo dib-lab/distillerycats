@@ -5,10 +5,23 @@ import glob
 import os
 from collections import Counter
 
-metadata_file = "inputs/test_metadata.csv"
+metadata_file = config["metadata_file"]
 m = pd.read_csv(metadata_file, header = 0)
 SAMPLES = m['sample'].unique().tolist()
 STUDY = m['study'].unique().tolist()
+
+# basic snakemake reporting (customize later!)
+onstart:
+    print("------------------------------")
+    print("Starting distillerycats workflow!")
+    print("------------------------------")
+
+
+onsuccess:
+    print("\n--- Workflow executed successfully! ---\n")
+
+onerror:
+    print("Alas!\n")
 
 rule all:
     input:
@@ -17,6 +30,19 @@ rule all:
         "outputs/comp/var_plt_all_filt_jaccard.pdf",
         "outputs/gather_matches_lca/lca_summarize.csv",
         expand('outputs/optimal_rf/{study}_validation_acc.csv', study = STUDY)
+
+# print out the configuration
+rule showconf:
+    run:
+        import yaml
+        print('# full aggregated configuration:')
+        print(yaml.dump(config).strip())
+        print('# END')
+
+# check config files only
+rule check:
+    run:
+        pass
 
 ########################################
 ## PREPROCESSING

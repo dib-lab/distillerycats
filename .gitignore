@@ -1,1 +1,8 @@
 *slurm*out
+*/version.py
+__pycache__
+*pyc
+*.eggs/
+*.egg-info/
+.snakemake/
+*.tar*
