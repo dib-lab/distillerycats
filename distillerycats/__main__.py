@@ -8,7 +8,7 @@ import click
 
 def get_snakefile_path(name):
     thisdir = os.path.dirname(__file__)
-    snakefile = os.path.join(thisdir, "conf", name)
+    snakefile = os.path.join(thisdir, name)
     return snakefile
 
 
