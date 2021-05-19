@@ -54,7 +54,7 @@ metadata_file: inputs/test_metadata.csv
 ```
 > Note: configuration is under development
 
-## Run distillercats!
+## Run distillerycats!
 
 Execute:
 
