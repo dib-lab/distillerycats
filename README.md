@@ -36,8 +36,13 @@ git clone https://github.com/dib-lab/distillerycats.git
 
 ```
 cd distillerycats
-conda env create -f environment.yml -n dcats
+conda env create -f environment.yml
 conda activate dcats
+```
+
+Now, do a development-ready install:
+```
+pip install -e '.'
 ```
 
 Make sure your input data is in the `inputs/raw` directory. This pipeline assumes that all input data paths follow this format:

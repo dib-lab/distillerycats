@@ -1,4 +1,4 @@
-name: distillerycats
+name: dcats
 channels:
    - conda-forge
    - bioconda
