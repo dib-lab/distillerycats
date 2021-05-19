@@ -5,10 +5,23 @@ import glob
 import os
 from collections import Counter
 
-metadata_file = "inputs/test_metadata.csv"
+metadata_file = config["metadata_file"]
 m = pd.read_csv(metadata_file, header = 0)
 SAMPLES = m['sample'].unique().tolist()
 STUDY = m['study'].unique().tolist()
+
+# basic snakemake reporting (customize later!)
+onstart:
+    print("------------------------------")
+    print("Starting distillerycats workflow!")
+    print("------------------------------")
+
+
+onsuccess:
+    print("\n--- Workflow executed successfully! ---\n")
+
+onerror:
+    print("Alas!\n")
 
 rule all:
     input:
@@ -17,6 +30,19 @@ rule all:
         "outputs/{alpha}-{ksize}/comp/var_plt_all_filt_jaccard.pdf",
         #"outputs/{alpha}-{ksize}/gather_matches_lca/lca_summarize.csv",
         expand('outputs/{alpha}-{ksize}/optimal_rf/{study}_validation_acc.csv', study = STUDY)
+
+# print out the configuration
+rule showconf:
+    run:
+        import yaml
+        print('# full aggregated configuration:')
+        print(yaml.dump(config).strip())
+        print('# END')
+
+# check config files only
+rule check:
+    run:
+        pass
 
 ########################################
 ## PREPROCESSING
@@ -122,7 +148,7 @@ rule drop_unique_hashes:
     conda: 'envs/sourmash.yml'
     shell:
         """
-        python scripts/drop_unique_hashes.py --alphabet {wildcards.alpha} \
+        python -m distillerycats.drop_unique_hashes.py --alphabet {wildcards.alpha} \
                                              --ksize {wildcards.ksize} \
                                              --minimum-count 2 \
                                              --output {output}
@@ -164,7 +190,7 @@ rule convert_greater_than_1_signatures_to_csv:
     output: "outputs/{alpha}-{ksize}/filt_sigs_named_csv/{sample}_filt_named.csv"
     conda: 'envs/sourmash.yml'
     shell:'''
-    python scripts/sig_to_csv.py {input} {output}
+    python -m distillerycats.sig_to_csv {input} {output}
     '''
 
 rule make_hash_abund_table_long_normalized:
@@ -172,7 +198,7 @@ rule make_hash_abund_table_long_normalized:
         expand("outputs/{{alpha}}-{{ksize}}/filt_sigs_named_csv/{sample}_filt_named.csv", sample = SAMPLES)
     output: csv = "outputs/{alpha}-{ksize}/hash_tables/normalized_abund_hashes_long.csv"
     conda: 'envs/r.yml'
-    script: "scripts/normalized_hash_abund_long.R"
+    script: "normalized_hash_abund_long.R"
 
 rule make_hash_abund_table_wide:
     input: "outputs/{alpha}-{ksize}/hash_tables/normalized_abund_hashes_long.csv"
@@ -198,7 +224,7 @@ rule install_pomona:
     output:
         pomona = "outputs/vita_rf/pomona_install.txt"
     conda: 'envs/rf.yml'
-    script: "scripts/install_pomona.R"
+    script: "install_pomona.R"
 
 rule vita_var_sel_rf:
     input:
@@ -213,14 +239,14 @@ rule vita_var_sel_rf:
         threads = 4,
         validation_study = "{study}"
     conda: 'envs/rf.yml'
-    script: "scripts/vita_rf.R"
+    script: "vita_rf.R"
 
 rule loo_validation:
     input: 
         var_filt = 'outputs/{alpha}-{ksize}/vita_rf/{study}_var_filt.csv',
         info = metadata_file,
-        eval_model = 'scripts/function_evaluate_model.R',
-        ggconfusion = 'scripts/ggplotConfusionMatrix.R'
+        eval_model = 'function_evaluate_model.R',
+        ggconfusion = 'ggplotConfusionMatrix.R'
     output: 
         recommended_pars = 'outputs/{alpha}-{ksize}/optimal_rf/{study}_rec_pars.tsv',
         optimal_rf = 'outputs/{alpha}-{ksize}/optimal_rf/{study}_optimal_rf.RDS',
@@ -232,7 +258,7 @@ rule loo_validation:
         threads = 5,
         validation_study = "{study}"
     conda: 'envs/tuneranger.yml'
-    script: "scripts/tune_rf.R"
+    script: "tune_rf.R"
 
 
 ############################################
@@ -244,7 +270,7 @@ rule convert_vita_vars_to_sig:
     output: "outputs/{alpha}-{ksize}/vita_rf/{study}_vita_vars.sig"
     conda: "envs/sourmash.yml"
     shell:'''
-    python scripts/hashvals-to-signature.py -o {output} -k 31 --scaled 2000 --name vita_vars --filename {input} {input}
+    python -m distillerycats.hashvals_to_signature -o {output} -k 31 --scaled 2000 --name vita_vars --filename {input} {input}
     '''
 
 # CHECK: this db contains all of previous dbs?
@@ -422,7 +448,7 @@ rule permanova_jaccard:
     output: 
         perm = "outputs/{alpha}-{ksize}/comp/all_filt_permanova_jaccard.csv"
     conda: "envs/vegan.yml"
-    script: "scripts/run_permanova.R"
+    script: "run_permanova.R"
 
 rule permanova_cosine:
     input: 
@@ -432,7 +458,7 @@ rule permanova_cosine:
     output: 
         perm = "outputs/{alpha}-{ksize}/comp/all_filt_permanova_cosine.csv"
     conda: "envs/vegan.yml"
-    script: "scripts/run_permanova.R"
+    script: "run_permanova.R"
 
 rule plot_comp_jaccard:
     input:
@@ -442,7 +468,7 @@ rule plot_comp_jaccard:
         study = "outputs/{alpha}-{ksize}/comp/study_plt_all_filt_jaccard.pdf",
         var = "outputs/{alpha}-{ksize}/comp/var_plt_all_filt_jaccard.pdf"
     conda: "envs/ggplot.yml"
-    script: "scripts/plot_comp.R"
+    script: "plot_comp.R"
 
 rule plot_comp_cosine:
     input:
@@ -452,6 +478,6 @@ rule plot_comp_cosine:
         study = "outputs/{alpha}-{ksize}/comp/study_plt_all_filt_cosine.pdf",
         var = "outputs/{alpha}-{ksize}/comp/var_plt_all_filt_cosine.pdf"
     conda: "envs/ggplot.yml"
-    script: "scripts/plot_comp.R"
+    script: "plot_comp.R"
 
 
