@@ -9,3 +9,4 @@ dependencies:
    - sourmash>=4.1,<5
    - pandas=1.2.4
    - feather-format=0.4.1
+   - pytest
