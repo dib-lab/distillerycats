@@ -10,6 +10,37 @@ m = pd.read_csv(metadata_file, header = 0)
 SAMPLES = m['sample'].unique().tolist()
 STUDY = m['study'].unique().tolist()
 
+# check params are in the right format
+for alpha, info in config["alphabet_info"].items():
+    scaled = info["scaled"]
+    ksize = info["ksize"]
+    if not isinstance(scaled, list):
+        config["alphabet_info"][alpha]["scaled"] = [scaled]
+    if not isinstance(ksize, list):
+        config["alphabet_info"][alpha]["ksize"] = [ksize]
+
+# load database info and figure out which databases we need
+def make_db_fullname(row):
+    row["db_fullname"] = f"{row['db_basename']}.{row['alphabet']}-k{str(row['ksize'])}-scaled{str(row['scaled'])}"
+    return row
+
+avail_dbs = pd.read_csv(db_file, sep=separator, index_col=False)
+assert list(avail_dbs.columns) == ["db_basename","alphabet","ksize","scaled","path","info_path"]
+avail_dbs = avail_dbs.apply(make_db_fullname, axis=1)
+# verify_integrity checks the new index for duplicates.
+avail_dbs.set_index("db_fullname", inplace=True, verify_integrity=True)
+config["available_databases"] = avail_dbs
+
+
+databases_to_use=[]
+alphabet_info=config["alphabet_info"]
+for alphabet, info in alphabet_info.items():
+    # do we need just alpha-ksizes for some things?
+    #ak = expand("{alpha}-k{ksize}", alpha=alphabet, ksize=info["ksizes"])
+    #alpha_ksizes.extend(ak)
+    aks = expand("{alpha}-k{ksize}-scaled{scaled}", alpha=alphabet, ksize=info["ksize"], scaled=info["scaled"])
+    databases_to_use.extend(aks)
+
 # basic snakemake reporting (customize later!)
 onstart:
     print("------------------------------")
@@ -43,6 +74,16 @@ rule showconf:
 rule check:
     run:
         pass
+
+########################################
+# LINK OR DOWNLOAD DATABASES
+########################################
+
+rule get_databases:
+    input:
+        expand(os.path.join(database_dir, "{db}.{aks}.sbt.zip"), db=config["database"], aks=databases_to_use)
+
+
 
 ########################################
 ## PREPROCESSING
