@@ -6,32 +6,33 @@ from sourmash import sourmash_args
 from collections import Counter
 
 
+def drop_below_mincount(hashCounter, min_count):
+    for hashes, cnts in hashCounter.copy().items():
+        if cnts < min_count:
+            hashCounter.pop(hashes)
+    return hashCounter
+
+def build_hashCounter(sigs, hashCounter):
+    for sig in sigs:
+        hashCounter.update(sig.minhash.hashes) # add hashes to Counter
+    return hashCounter
+
+
 def main(args):
     min_count = args.minimum_count
-    # select sigs that match specified ksize, moltype. Store hashes.
+    # select sigs that match specified ksize, moltype.
     sigs = sourmash_args.load_file_as_signatures(args.signatures_file, ksize=args.ksize, select_moltype=args.alphabet)
 
-    fresh_mh = sigs[0].minhash.copy_and_clear()
+    # count hashes
     counts = Counter()
-    #hashes = []
-    for sig in sigs:
-        counts.update(sig.minhash.hashes)
-        #hashes+= sig.minhash.hashes # Get the minhashes
-
-    #counts = Counter(hashes)
+    counts = build_hashCounter(sigs, counts)
     print(f"dropping unique hashes for molecule: {args.alphabet}, ksize: {args.ksize}")
-    for hashes, cnts in counts.copy().items():
-        if cnts < min_count:
-            counts.pop(hashes)
-
-    # write out hashes
-    #if args.output_hashes:
-    #    with open(args.output_hashes, "w") as out:
-    #        for key in counts:
-    #            print(key, file=out)
+    # drop hashes below min_count threshold
+    counts = drop_hashes(counts, min_count)
 
     # write out sig
     if args.output_sig:
+        fresh_mh = sigs[0].minhash.copy_and_clear()
         # add hashes to fresh_mh
         fresh_mh.add_many(counts.keys())
         # build sig
@@ -49,7 +50,7 @@ def cmdline(sys_args):
     p.add_argument('--ksize', help='ksize', default=31)
 
     # output options:
-    #p.add_argument('--output-hashes', help='store list of hashes')
+
     p.add_argument('--output', help='store abundance filtered hashes as signature')
     args = p.parse_args()
 
