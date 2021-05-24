@@ -3,4 +3,4 @@ channels:
    - bioconda
    - defaults
 dependencies:
-   - sourmash>=4.1.0,<5
+   - khmer=3.0.0a3 

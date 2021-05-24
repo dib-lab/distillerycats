@@ -6,8 +6,6 @@ from sourmash import sourmash_args
 from collections import Counter
 
 
-
-
 def drop_below_mincount(hashCounter, min_count):
     for hashes, cnts in hashCounter.copy().items():
         if cnts < min_count:
@@ -52,11 +50,11 @@ def cmdline(sys_args):
     p.add_argument('--ksize', help='ksize', default=31)
 
     # output options:
+
     p.add_argument('--output', help='store abundance filtered hashes as signature')
     args = p.parse_args()
 
     return main(args)
-
 
 # execute this, when run with `python -m`.
 if __name__ == '__main__':

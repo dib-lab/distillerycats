@@ -84,34 +84,31 @@ PSM7J1BJ,iHMP,CD
 PSM7J177,iHMP,CD
 ```
 
-The metadata file must be located in the `inputs` directory, and should be called `test_metadata.csv`. It needs to be in csv format, and should have the sample columns `sample`, `study`, and `var`. The names must match exactly in capitalization/spelling. 
+The metadata file must be located in the `inputs` directory, and should be called `test_metadata.csv`. 
+It needs to be in csv format, and should have the sample columns `sample`, `study`, and `var`. 
+The names  must match exactly in capitalization/spelling. 
 
-If you would like to try distillerycats on a (large) test data set, we have uploaded one to OSF. 
+If you would like to try distillerycats on a test data set, we have uploaded one to OSF. 
 
-To run the full pipeline including read preprocessing, including adapter trimming, human DNA removal, and k-mer abundance trimming, download this following dataset, untar it, and make sure the fastq files are in `inputs/raw` as below. Note that k-mer trimming and human DNA removal both take ~64GB of RAM. 
+To run the full pipeline including read preprocessing, including adapter trimming, human DNA removal, and k-mer abundance trimming, download this following dataset, untar it, and make sure the fastq files are in `inputs/raw` as below. 
+Note that k-mer trimming and human DNA removal both hardcoded to take ~64GB of RAM (this will be updated to read in mem limits from the configuration file in the future). 
 
 ```
 mkdir -p inputs/raw
-wget -O inputs/test_data.tar.gz https:...
+wget -O inputs/test_data.tar.gz https://osf.io/tu8rj/download
 tar xf inputs/test_data.tar.gz -C inputs/raw
 ```
 
-If you would like to skip read preprocessing but would still like to try the pipeline, you can either download the preprocessed reads, or you can download the signatures. These files should be placed in `ouputs/abundtrim` and `outputs/sigs`, respectively. The first step in the pipeline after preprocessing is to calculate signatures, and signatures are much lighter weight than preprocessed fastq files. 
-
-preprocessed reads:
-
-```
-mkdir -p outputs
-wget -O outputs/abundtrim.tar.gz ...
-tar xf outputs/abundtrim.tar.gz -C outputs/
-```
+If you would like to skip read preprocessing but would still like to try the pipeline, you can download the signatures. 
+These files should be placed in `outputs/sigs`.
+The first step in the pipeline after preprocessing is to calculate signatures, and signatures are much lighter weight than preprocessed fastq files.
 
 signatures:
 
 ```
 mkdir -p outputs
-wget -O outputs/sigs.tar.gz https://osf.io/scbk8/
-tar xf outputs/sigs.tar.gz -C outputs/
+wget -O outputs/sigs.tar.gz https://osf.io/r8uyt/download
+tar xf outputs/sigs.tar.gz -C outputs/sigs
 ```
 
 ---
